@@ -16,7 +16,9 @@ class ShoutApp:
             "button_selected": "#00A8E8",
             "entry_bg": "#444",
             "entry_fg": "#FFFFFF",
-            "checkbox_select": "#777"
+            "checkbox_select": "#777",
+            "text_area_bg": "#333",
+            "text_area_fg": "#FFFFFF"
         },
         "light": {
             "bg": "#FFFFFF",
@@ -26,7 +28,9 @@ class ShoutApp:
             "button_selected": "#0078D7",
             "entry_bg": "#DDDDDD",
             "entry_fg": "#000000",
-            "checkbox_select": "#AAAAAA"
+            "checkbox_select": "#AAAAAA",
+            "text_area_bg": "#F0F0F0",
+            "text_area_fg": "#000000"
         }
     }
     
@@ -50,12 +54,15 @@ class ShoutApp:
         self.buttons = {}
         self.labels = []
         self.entries = []
+        self.all_frames = []  # Track all frames for theme application
         
         # Load config or use defaults
         self.load_config()
         
         # Set up the UI
         self.setup_ui()
+        
+        # Apply theme - this needs to happen after UI is completely set up
         self.apply_theme()
         
         # Set up keyboard shortcuts
@@ -89,7 +96,8 @@ class ShoutApp:
             # Update config with current values
             self.config["theme"] = "light" if self.is_light_mode() else "dark"
             self.config["always_on_top"] = self.always_on_top_var.get()
-            self.config["last_used_group"] = self.group_var.get().replace("@", "")
+            if self.group_var.get():
+                self.config["last_used_group"] = self.group_var.get().replace("@", "")
             
             # Save to file
             with open(self.CONFIG_FILE, 'w') as f:
@@ -103,12 +111,15 @@ class ShoutApp:
         # Create main frames
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
+        self.all_frames.append(self.main_frame)
         
         self.left_frame = tk.Frame(self.main_frame)
         self.left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+        self.all_frames.append(self.left_frame)
         
         self.right_frame = tk.Frame(self.main_frame)
         self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.all_frames.append(self.right_frame)
         
         # Create group selection buttons
         self.create_group_buttons()
@@ -116,13 +127,13 @@ class ShoutApp:
         # Create input fields
         self.create_input_fields()
         
-        # Create action buttons
+        # Create action buttons - THIS IS WHERE THE WHITE BAR ISSUE IS
         self.create_action_buttons()
         
         # Create output area
         self.create_output_area()
         
-        # Create footer controls
+        # Create footer controls - THIS IS WHERE THE SHORTCUTS DISPLAY ISSUE IS
         self.create_footer_controls()
     
     def create_group_buttons(self):
@@ -156,6 +167,7 @@ class ShoutApp:
         for label_text, attr_name in fields:
             frame = tk.Frame(self.right_frame)
             frame.pack(fill=tk.X, pady=2)
+            self.all_frames.append(frame)
             
             label = tk.Label(frame, text=label_text, width=20, anchor="w")
             label.pack(side=tk.LEFT)
@@ -170,59 +182,74 @@ class ShoutApp:
     
     def create_action_buttons(self):
         """Create buttons for generating message and copying"""
-        button_frame = tk.Frame(self.right_frame)
-        button_frame.pack(fill=tk.X, pady=10)
+        # Create frame with explicit background color to fix white bar
+        self.button_frame = tk.Frame(self.right_frame)
+        self.button_frame.pack(fill=tk.X, pady=10)
+        self.all_frames.append(self.button_frame)
         
-        self.generate_button = tk.Button(button_frame, text="Generate Message", 
+        self.generate_button = tk.Button(self.button_frame, text="Generate Message", 
                                         command=self.generate_message, 
                                         relief=tk.FLAT)
         self.generate_button.pack(side=tk.LEFT, padx=5)
         
-        self.copy_button = tk.Button(button_frame, text="Copy to Clipboard", 
+        self.copy_button = tk.Button(self.button_frame, text="Copy to Clipboard", 
                                     command=self.copy_to_clipboard, 
                                     relief=tk.FLAT)
         self.copy_button.pack(side=tk.LEFT, padx=5)
         
-        self.clear_button = tk.Button(button_frame, text="Clear Fields", 
+        self.clear_button = tk.Button(self.button_frame, text="Clear Fields", 
                                      command=self.clear_fields, 
                                      relief=tk.FLAT)
         self.clear_button.pack(side=tk.LEFT, padx=5)
     
     def create_output_area(self):
         """Create output text area"""
-        output_label = tk.Label(self.right_frame, text="Generated Message:")
-        output_label.pack(anchor="w")
-        self.labels.append(output_label)
+        self.output_frame = tk.Frame(self.right_frame)
+        self.output_frame.pack(fill=tk.BOTH, expand=True)
+        self.all_frames.append(self.output_frame)
         
-        self.output_text = tk.Text(self.right_frame, height=5, width=70)
+        self.output_label = tk.Label(self.output_frame, text="Generated Message:")
+        self.output_label.pack(anchor="w")
+        self.labels.append(self.output_label)
+        
+        self.output_text = tk.Text(self.output_frame, height=5, width=70)
         self.output_text.pack(fill=tk.BOTH, expand=True)
     
     def create_footer_controls(self):
         """Create footer controls like theme toggle and always on top"""
-        footer_frame = tk.Frame(self.right_frame)
-        footer_frame.pack(fill=tk.X, pady=10)
+        # Create a dedicated frame for the footer with explicit styling
+        self.footer_frame = tk.Frame(self.right_frame)
+        self.footer_frame.pack(fill=tk.X, pady=10)
+        self.all_frames.append(self.footer_frame)
         
-        # Always on top checkbox
+        # Always on top checkbox - explicitly styled
         self.always_on_top_checkbox = tk.Checkbutton(
-            footer_frame, text="Always on Top", 
+            self.footer_frame, 
+            text="Always on Top", 
             variable=self.always_on_top_var, 
             command=self.toggle_always_on_top
         )
         self.always_on_top_checkbox.pack(side=tk.LEFT, padx=5)
         
-        # Theme toggle button
+        # Create a fixed-width label for shortcuts with explicit styling
+        # This replaces the previous status label implementation
+        self.shortcuts_label = tk.Label(
+            self.footer_frame,
+            text="Shortcuts: Ctrl+G (Generate), Ctrl+C (Copy), Ctrl+L (Clear), F1 (Help)",
+            anchor="w",
+            padx=5
+        )
+        self.shortcuts_label.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        self.labels.append(self.shortcuts_label)
+        
+        # Theme toggle button - explicit styling
         self.theme_button = tk.Button(
-            footer_frame, 
+            self.footer_frame, 
             text="Switch to Light Mode" if self.config["theme"] == "dark" else "Switch to Dark Mode",
             command=self.toggle_theme, 
             relief=tk.FLAT
         )
         self.theme_button.pack(side=tk.RIGHT, padx=5)
-        
-        # Status label (for keyboard shortcuts info etc.)
-        self.status_label = tk.Label(footer_frame, text="")
-        self.status_label.pack(side=tk.LEFT, padx=20)
-        self.labels.append(self.status_label)
     
     def setup_shortcuts(self):
         """Setup keyboard shortcuts"""
@@ -230,9 +257,6 @@ class ShoutApp:
         self.root.bind("<Control-c>", lambda e: self.copy_to_clipboard())
         self.root.bind("<Control-l>", lambda e: self.clear_fields())
         self.root.bind("<F1>", lambda e: self.show_help())
-        
-        # Update status label with keyboard shortcut info
-        self.status_label.config(text="Shortcuts: Ctrl+G (Generate), Ctrl+C (Copy), Ctrl+L (Clear), F1 (Help)")
     
     def show_help(self):
         """Show help information"""
@@ -324,10 +348,10 @@ Usage:
             self.root.clipboard_append(output_text)
             self.root.update()
             
-            # Show temporary success message
-            original_text = self.status_label.cget("text")
-            self.status_label.config(text="✓ Message copied to clipboard!")
-            self.root.after(2000, lambda: self.status_label.config(text=original_text))
+            # Show temporary success message in the shortcuts label
+            original_text = self.shortcuts_label.cget("text")
+            self.shortcuts_label.config(text="✓ Message copied to clipboard!")
+            self.root.after(2000, lambda: self.shortcuts_label.config(text=original_text))
             
         except Exception as e:
             messagebox.showerror("Clipboard Error", f"Could not copy to clipboard: {e}")
@@ -370,15 +394,18 @@ Usage:
         """Apply the current theme to all widgets"""
         colors = self.COLOR_SCHEMES[self.config["theme"]]
         
-        # Update window and frames
-        for widget in [self.root, self.main_frame, self.left_frame, self.right_frame]:
-            widget.configure(bg=colors["bg"])
+        # First apply to root
+        self.root.configure(bg=colors["bg"])
         
-        # Update labels
+        # Apply to ALL frames (crucial for fixing the white bar)
+        for frame in self.all_frames:
+            frame.configure(bg=colors["bg"])
+        
+        # Update all labels
         for label in self.labels:
             label.configure(bg=colors["bg"], fg=colors["fg"])
         
-        # Update buttons
+        # Update group buttons
         for group, btn in self.buttons.items():
             if self.group_var.get() == f"@{group}":
                 btn.configure(bg=colors["button_selected"], fg=colors["fg"])
@@ -396,13 +423,25 @@ Usage:
             entry.configure(bg=colors["entry_bg"], fg=colors["entry_fg"])
         
         # Update text area
-        self.output_text.configure(bg=colors["entry_bg"], fg=colors["entry_fg"])
+        self.output_text.configure(
+            bg=colors["text_area_bg"], 
+            fg=colors["text_area_fg"],
+            insertbackground=colors["fg"]
+        )
         
-        # Update checkbox
+        # Update checkbox - specifically fix its background
         self.always_on_top_checkbox.configure(
             bg=colors["bg"], 
             fg=colors["fg"],
-            selectcolor=colors["checkbox_select"]
+            selectcolor=colors["checkbox_select"],
+            activebackground=colors["bg"],
+            highlightbackground=colors["bg"]
+        )
+        
+        # Ensure the shortcuts label has the correct styling
+        self.shortcuts_label.configure(
+            bg=colors["bg"],
+            fg=colors["fg"]
         )
     
     def on_closing(self):
