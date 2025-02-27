@@ -37,8 +37,14 @@ class ShoutApp:
     # Predefined groups
     DEFAULT_GROUPS = [
         "BI Premium_Pipeline_Oncall", "BI_MyT_Mobile", "BI_SCBP_SRT-Oncall", "BI_WebPD",
-        "Bond_DT", "Canada_DT", "Claim_DT", "DE_DT", "IAM_DT", "J2EE_DT", "PI_DT"
+        "Bond_DT", "Canada_DT", "Claim_DT", "DE_DT", "IAM_DT", "J2EE_DT", "PI_DT",
+        "MDM_Legos", "BI-Control Room", "CorpTech_DT", "AIPP", "ED&A_GEO", "PAAS_DT", "UK_DT"
     ]
+    
+    # Special groups with different display names
+    SPECIAL_GROUPS = {
+        "PI-ProdServices": "PI-ProdServices.Distributed"
+    }
     
     # Config file path
     CONFIG_FILE = Path.home() / ".shout_config.json"
@@ -46,7 +52,12 @@ class ShoutApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Shout!")
-        self.root.geometry("640x520")
+        
+        # Set initial window size to match the preferred size
+        self.root.geometry("1080x675")
+        
+        # Set minimum window size to ensure all elements remain visible
+        self.root.minsize(1000, 650)
         
         # Initialize variables
         self.group_var = tk.StringVar()
@@ -72,16 +83,33 @@ class ShoutApp:
         """Load configuration from file or use defaults"""
         self.config = {
             "theme": "dark",
-            "groups": self.DEFAULT_GROUPS,
+            "groups": self.DEFAULT_GROUPS.copy(),  # Create a copy to ensure we don't modify the original
             "always_on_top": False,
             "last_used_group": "",
         }
+        
+        # Add special groups to the config
+        for display_name, full_name in self.SPECIAL_GROUPS.items():
+            if full_name not in self.config["groups"]:
+                self.config["groups"].append(full_name)
         
         # Try to load from config file
         if self.CONFIG_FILE.exists():
             try:
                 with open(self.CONFIG_FILE, 'r') as f:
                     loaded_config = json.load(f)
+                    
+                    # Make sure we're not losing the default groups when loading config
+                    if "groups" in loaded_config:
+                        # Ensure all default groups and special groups are present
+                        for group in self.DEFAULT_GROUPS:
+                            if group not in loaded_config["groups"]:
+                                loaded_config["groups"].append(group)
+                        
+                        for _, full_name in self.SPECIAL_GROUPS.items():
+                            if full_name not in loaded_config["groups"]:
+                                loaded_config["groups"].append(full_name)
+                    
                     self.config.update(loaded_config)
             except (json.JSONDecodeError, IOError) as e:
                 # Log the error but continue with defaults
@@ -117,23 +145,28 @@ class ShoutApp:
         self.left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
         self.all_frames.append(self.left_frame)
         
+        # Create a right frame that uses grid for better layout control
         self.right_frame = tk.Frame(self.main_frame)
         self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         self.all_frames.append(self.right_frame)
         
+        # Configure the right frame's grid
+        self.right_frame.grid_columnconfigure(0, weight=1)
+        self.right_frame.grid_rowconfigure(2, weight=1)  # Make the output area expandable
+        
         # Create group selection buttons
         self.create_group_buttons()
         
-        # Create input fields
+        # Create input fields (row 0)
         self.create_input_fields()
         
-        # Create action buttons - THIS IS WHERE THE WHITE BAR ISSUE IS
+        # Create action buttons (row 1)
         self.create_action_buttons()
         
-        # Create output area
+        # Create output area (row 2 - expandable)
         self.create_output_area()
         
-        # Create footer controls - THIS IS WHERE THE SHORTCUTS DISPLAY ISSUE IS
+        # Create footer controls (row 3 - fixed at bottom)
         self.create_footer_controls()
     
     def create_group_buttons(self):
@@ -143,17 +176,31 @@ class ShoutApp:
         group_label.pack(anchor="w", pady=(0, 5))
         self.labels.append(group_label)
         
-        # Group buttons
-        for group in self.config["groups"]:
-            btn = tk.Button(self.left_frame, text=group, 
+        # Create a simple frame for buttons instead of scrollable canvas
+        button_frame = tk.Frame(self.left_frame)
+        button_frame.pack(fill=tk.BOTH, expand=True)
+        self.all_frames.append(button_frame)
+        
+        # Regular groups from the DEFAULT_GROUPS constant
+        for group in self.DEFAULT_GROUPS:
+            btn = tk.Button(button_frame, text=group, 
                            command=lambda g=group: self.set_group(g),
                            width=25, relief=tk.FLAT)
-            btn.pack(pady=2)
+            btn.pack(pady=2, padx=1, fill=tk.X)
             self.buttons[group] = btn
+        
+        # Special groups with different display names
+        for display_name, full_name in self.SPECIAL_GROUPS.items():
+            btn = tk.Button(button_frame, text=display_name,
+                           command=lambda g=full_name: self.set_group(g),
+                           width=25, relief=tk.FLAT)
+            btn.pack(pady=2, padx=1, fill=tk.X)
+            self.buttons[full_name] = btn
             
         # Set last used group if available
-        if self.config["last_used_group"] and self.config["last_used_group"] in self.config["groups"]:
-            self.set_group(self.config["last_used_group"])
+        if self.config["last_used_group"]:
+            if self.config["last_used_group"] in self.buttons:
+                self.set_group(self.config["last_used_group"])
     
     def create_input_fields(self):
         """Create input fields for incident details"""
@@ -164,8 +211,13 @@ class ShoutApp:
             ("Dynatrace URL:", "url_entry")
         ]
         
-        for label_text, attr_name in fields:
-            frame = tk.Frame(self.right_frame)
+        # Create a container frame for all input fields
+        input_container = tk.Frame(self.right_frame)
+        input_container.grid(row=0, column=0, sticky="ew", pady=5)
+        self.all_frames.append(input_container)
+        
+        for i, (label_text, attr_name) in enumerate(fields):
+            frame = tk.Frame(input_container)
             frame.pack(fill=tk.X, pady=2)
             self.all_frames.append(frame)
             
@@ -184,7 +236,7 @@ class ShoutApp:
         """Create buttons for generating message and copying"""
         # Create frame with explicit background color to fix white bar
         self.button_frame = tk.Frame(self.right_frame)
-        self.button_frame.pack(fill=tk.X, pady=10)
+        self.button_frame.grid(row=1, column=0, sticky="ew", pady=5)
         self.all_frames.append(self.button_frame)
         
         self.generate_button = tk.Button(self.button_frame, text="Generate Message", 
@@ -205,7 +257,7 @@ class ShoutApp:
     def create_output_area(self):
         """Create output text area"""
         self.output_frame = tk.Frame(self.right_frame)
-        self.output_frame.pack(fill=tk.BOTH, expand=True)
+        self.output_frame.grid(row=2, column=0, sticky="nsew", pady=5)
         self.all_frames.append(self.output_frame)
         
         self.output_label = tk.Label(self.output_frame, text="Generated Message:")
@@ -217,9 +269,9 @@ class ShoutApp:
     
     def create_footer_controls(self):
         """Create footer controls like theme toggle and always on top"""
-        # Create a dedicated frame for the footer with explicit styling
+        # Create a dedicated frame for the footer with explicit styling that stays at the bottom
         self.footer_frame = tk.Frame(self.right_frame)
-        self.footer_frame.pack(fill=tk.X, pady=10)
+        self.footer_frame.grid(row=3, column=0, sticky="ew", pady=5)
         self.all_frames.append(self.footer_frame)
         
         # Always on top checkbox - explicitly styled
